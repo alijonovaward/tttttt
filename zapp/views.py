@@ -254,8 +254,6 @@ def home_view(request):
     #         criteria__isnull=False
     #     ).prefetch_related('criteria').order_by('-created_at')
 
-    # oka
-
     criteria_filters = Q(incoming_request__organization=selected_organization)
     if request.GET.get('contact'):
         criteria_filters &= Q(contact__gt=0)
