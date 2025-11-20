@@ -243,17 +243,6 @@ def home_view(request):
 
     processed_requests = processed_requests.prefetch_related('criteria').order_by('-created_at')
 
-    # processed_requests = IncomingRequest.objects.filter(
-    #     organization=selected_organization,
-    #     ignored=False,
-    #     criteria__isnull=False
-    # ).filter(filters).prefetch_related('criteria').order_by('-created_at') if filters else \
-    #     IncomingRequest.objects.filter(
-    #         organization=selected_organization,
-    #         ignored=False,
-    #         criteria__isnull=False
-    #     ).prefetch_related('criteria').order_by('-created_at')
-
     criteria_filters = Q(incoming_request__organization=selected_organization)
     if request.GET.get('contact'):
         criteria_filters &= Q(contact__gt=0)
