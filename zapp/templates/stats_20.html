@@ -1,0 +1,787 @@
+
+{% load criteria_tags %}
+{% load custom_tags %}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+<div class="min-h-screen bg-gradient-to-b from-[#f6f9fe] to-[#e5f0ff] pb-12">
+
+<header class="pt-8 pb-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto animate-fade-in"><div class="flex items-center mb-2"><div class="h-10 w-10 mr-3"></div><h1 class="text-3xl font-semibold tracking-tight text-[#2B3467]">Аналитика звонков</h1><div class="ml-4 flex items-center text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full"></div></div><div class="flex justify-between items-center"><p class="mt-2 text-muted-foreground ml-11">Аналитика и статистика по отделу продаж</p></div></header>
+
+<!-- Блок 0: Фильтры -->
+
+<section class="mb-10 px-6 sm:px-8 lg:px-10 max-w-8xl mx-auto animate-fade-up animate-delay-200">
+  <div class="rounded-lg text-card-foreground shadow-sm bg-white/95 backdrop-blur-sm border border-[#E5E6EB] shadow-soft overflow-hidden">
+    <div class="p-6">
+
+      <form method="get" id="filter-form">
+        <input type="hidden" name="organization_id" value="{{ selected_organization.id }}">
+        <input type="hidden" name="tab" value="stats20">
+
+        <div class="flex justify-between items-center space-x-2 mb-4">
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="include_ignored" name="include_ignored" value="1"
+                  {% if request.GET.include_ignored == "1" %}checked{% endif %}>
+            <label for="include_ignored" class="text-sm text-muted-foreground">Учитывать необработанные</label>
+          </div>
+          <button
+            type="submit"
+            form="filter-form"
+            class="justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-gray-100 hover:bg-gray-200 text-[#2B3467] h-9 rounded-md px-3 flex items-center gap-1"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M21.1679 8C19.6247 4.46819 16.1006 2 11.9999 2C6.81459 2 2.55104 5.94668 2.04932 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+              <path d="M17 8H21.4C21.7314 8 22 7.73137 22 7.4V3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+              <path d="M2.88146 16C4.42458 19.5318 7.94874 22 12.0494 22C17.2347 22 21.4983 18.0533 22 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+              <path d="M7.04932 16H2.64932C2.31795 16 2.04932 16.2686 2.04932 16.6V21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+            Применить
+          </button>
+        </div>
+        <!-- Базовые фильтры -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Диапазон дат -->
+          <div class="grid gap-2">
+            <label for="date-range" class="text-sm font-medium text-muted-foreground">Диапазон дат</label>
+            <input type="hidden" name="date_from" id="date_from" value="{{ request.GET.date_from }}">
+            <input type="hidden" name="date_to" id="date_to" value="{{ request.GET.date_to }}">
+            <input
+              type="text"
+              id="date-range"
+              class="h-10 px-4 py-2 border rounded-md text-sm bg-white border-input shadow-sm w-full"
+              placeholder="Выберите даты"
+            />
+          </div>
+
+          <!-- Фильтр по отделу -->
+          <div class="grid gap-2">
+            <label for="department" class="text-sm font-medium text-muted-foreground">Отделы</label>
+            <div class="relative">
+              <select
+                id="department"
+                name="department_id"
+                class="h-10 px-3 pr-10 py-2 border rounded-md text-sm bg-white border-input shadow-sm w-full appearance-none"
+              >
+                <option value="">Все отделы</option>
+                {% for dept in departments %}
+                  <option value="{{ dept.id }}" {% if request.GET.department_id == dept.id|stringformat:"s" %}selected{% endif %}>
+                    {{ dept.name }}
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-500">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Фильтр по менеджерам -->
+          <div class="grid gap-2">
+            <label for="manager_id" class="text-sm font-medium text-muted-foreground">Менеджер</label>
+            <div class="relative">
+              <select
+                name="manager_id"
+                id="manager_id"
+                class="h-10 px-3 pr-10 py-2 border rounded-md text-sm bg-white border-input shadow-sm w-full appearance-none"
+              >
+                <option value="">Все менеджеры</option>
+                {% for manager in managers %}
+                  <option value="{{ manager.id }}" {% if manager.id|stringformat:"s" == request.GET.manager_id %}selected{% endif %}>
+                    {{ manager.full_name }}
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-500">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          <!-- Фильтр по общей оценке -->
+          <div class="grid gap-2">
+            <label for="overall_score" class="text-sm font-medium text-muted-foreground">Общая оценка</label>
+            <div class="relative">
+              <select
+                name="overall_score_range"
+                id="overall_score"
+                class="h-10 px-3 pr-10 py-2 border rounded-md text-sm bg-white border-input shadow-sm w-full appearance-none"
+              >
+                <option value="">Все оценки</option>
+                <option value="lt25" {% if request.GET.overall_score_range == "lt25" %}selected{% endif %}>до 25%</option>
+                <option value="25to50" {% if request.GET.overall_score_range == "25to50" %}selected{% endif %}>25–50%</option>
+                <option value="50to75" {% if request.GET.overall_score_range == "50to75" %}selected{% endif %}>50–75%</option>
+                <option value="gt75" {% if request.GET.overall_score_range == "gt75" %}selected{% endif %}>более 75%</option>
+              </select>
+              <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-500">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 ">
+        <!-- Длительность звонка -->
+          <div class="grid gap-2 col-span-full">
+            <label class="text-sm font-medium text-muted-foreground">
+              Длительность звонка
+            </label>
+
+            <div class="grid grid-cols-2 gap-4">
+              <!-- Поле Min -->
+              <div class="flex flex-col">
+                <label for="audio_min" class="text-xs text-muted-foreground mb-1">Min (в секундах)</label>
+                <input type="number"
+                      id="audio_min"
+                      name="audio_min"
+                      min="0"
+                      class="h-10 px-3 py-2 border rounded-md text-sm bg-white border-input shadow-sm"
+                      value="{{ request.GET.audio_min }}">
+              </div>
+
+              <!-- Поле Max -->
+              <div class="flex flex-col">
+                <label for="audio_max" class="text-xs text-muted-foreground mb-1">Max (в секундах)</label>
+                <input type="number"
+                      id="audio_max"
+                      name="audio_max"
+                      min="0"
+                      class="h-10 px-3 py-2 border rounded-md text-sm bg-white border-input shadow-sm"
+                      value="{{ request.GET.audio_max }}">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Фильтры по критериям -->
+        <div class="mt-6 border-t pt-4 border-gray-100">
+          <h3 class="text-sm font-medium mb-4">Фильтр по оценкам критериев</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {% for field in criteria_labels_filtered %}
+              {% if criteria_labels|get_item:field %}
+                {% with param_min=field|add:"_min" param_max=field|add:"_max" %}
+                <div class="grid gap-1">
+                  <label class="text-xs font-medium text-muted-foreground">
+                    {{ criteria_labels|get_item:field|default:"Критерий" }}
+                  </label>
+                  <div class="flex gap-2">
+                    <input
+                      type="number"
+                      name="{{ param_min }}"
+                      step="0.1"
+                      placeholder="Min"
+                      class="w-full h-9 px-3 py-1 border rounded-md text-sm bg-white border-input shadow-sm"
+                      value="{{ request.GET|get_query_param:param_min }}"
+                    >
+                    <input
+                      type="number"
+                      name="{{ param_max }}"
+                      step="0.1"
+                      placeholder="Max"
+                      class="w-full h-9 px-3 py-1 border rounded-md text-sm bg-white border-input shadow-sm"
+                      value="{{ request.GET|get_query_param:param_max }}"
+                    >
+                  </div>
+                </div>
+                {% endwith %}
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- Блок 1: Количество звонков -->
+<section class="mb-10 px-6 sm:px-8 lg:px-10 max-w-8xl mx-auto animate-fade-up animate-delay-200">
+  <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+
+    <!-- Общее количество звонков -->
+    <div class="rounded-lg shadow-sm overflow-hidden bg-white/95 backdrop-blur-sm border border-[#E5E6EB] shadow-soft hover:shadow-md transition-all duration-300">
+      <div class="p-6 px-6 py-4 bg-gradient-to-r from-[#f6f9fe] to-[#e5f0ff] flex flex-row justify-between items-center">
+        <h3 class="text-lg font-medium tracking-tight text-[#2B3467]">Общее количество звонков</h3>
+      </div>
+      <div class="p-6">
+        <div class="flex items-center justify-between">
+          <div class="flex flex-col">
+            <span class="text-3xl font-semibold text-[#2B3467]">{{ stats_total_calls }}</span>
+            <span class="text-sm text-muted-foreground mt-1">За выбранный период</span>
+          </div>
+          <div class="h-12 w-12 bg-[#BAD7E9]/30 rounded-full flex items-center justify-center text-[#2B3467]">
+            <svg class="lucide lucide-phone h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.12.92.37 1.84.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Входящие звонки -->
+    <div class="rounded-lg shadow-sm overflow-hidden bg-white/95 backdrop-blur-sm border border-[#E5E6EB] shadow-soft hover:shadow-md transition-all duration-300">
+      <div class="p-6 px-6 py-4 bg-gradient-to-r from-[#f6f9fe] to-[#e5f0ff] flex flex-row justify-between items-center">
+        <h3 class="text-lg font-medium tracking-tight text-[#2B3467]">Входящие звонки</h3>
+      </div>
+      <div class="p-6">
+        <div class="flex items-center justify-between">
+          <div class="flex flex-col">
+            <span class="text-3xl font-semibold text-[#2B3467]">{{ stats_incoming_calls }}</span>
+            <span class="text-sm text-muted-foreground mt-1">
+            {% if stats_total_calls > 0 %}
+              {{ stats_incoming_calls|div:stats_total_calls|floatformat:1 }}% от общего числа
+            {% else %}
+              0% от общего числа
+            {% endif %}
+            </span>
+          </div>
+          <div class="h-12 w-12 bg-[#FCFFE7]/50 rounded-full flex items-center justify-center text-[#2B3467]">
+            <svg class="lucide lucide-phone-call h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2c-2.63-.59-5.92-2.16-8.63-3.07-2.91-1-6-6-6-6a19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.12.92.37 1.84.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.92.12 1.84.37 2.81.7A2 2 0 0122 16.92z"/>
+              <path d="M14.05 2a9 9 0 018 7.94"/>
+              <path d="M14.05 6A5 5 0 0118 10"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Исходящие звонки -->
+    <div class="rounded-lg shadow-sm overflow-hidden bg-white/95 backdrop-blur-sm border border-[#E5E6EB] shadow-soft hover:shadow-md transition-all duration-300">
+      <div class="p-6 px-6 py-4 bg-gradient-to-r from-[#f6f9fe] to-[#e5f0ff] flex flex-row justify-between items-center">
+        <h3 class="text-lg font-medium tracking-tight text-[#2B3467]">Исходящие звонки</h3>
+      </div>
+      <div class="p-6">
+        <div class="flex items-center justify-between">
+          <div class="flex flex-col">
+            <span class="text-3xl font-semibold text-[#2B3467]">{{ stats_outgoing_calls }}</span>
+            <span class="text-sm text-muted-foreground mt-1">
+              {% if stats_total_calls > 0 %}
+                {{ stats_outgoing_calls|div:stats_total_calls|floatformat:1 }}% от общего числа
+              {% else %}
+                0% от общего числа
+              {% endif %}
+            </span>
+          </div>
+          <div class="h-12 w-12 bg-[#EB455F]/10 rounded-full flex items-center justify-center text-[#EB455F]">
+            <svg class="lucide lucide-phone-outgoing h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <polyline points="22 8 22 2 16 2"></polyline>
+              <line x1="16" x2="22" y1="8" y2="2"></line>
+              <path d="M22 16.92v3a2 2 0 01-2.18 2c-2.63-.59-5.92-2.16-8.63-3.07-2.91-1-6-6-6-6a19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.12.92.37 1.84.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.92.12 1.84.37 2.81.7A2 2 0 0122 16.92z"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Общее время звонков -->
+    <div class="rounded-lg shadow-sm overflow-hidden bg-white/95 backdrop-blur-sm border border-[#E5E6EB] shadow-soft hover:shadow-md transition-all duration-300">
+      <div class="p-6 px-6 py-4 bg-gradient-to-r from-[#f6f9fe] to-[#e5f0ff] flex flex-row justify-between items-center">
+        <h3 class="text-lg font-medium tracking-tight text-[#2B3467]">Общее время звонков</h3>
+      </div>
+      <div class="p-6">
+        <div class="flex items-center justify-between">
+          <div class="flex flex-col">
+            <span class="text-3xl font-semibold text-[#2B3467]">{{ stats_total_minutes }}</span>
+          </div>
+          <div class="h-12 w-12 bg-[#AEE2FF]/30 rounded-full flex items-center justify-center text-[#2B3467]">
+            <svg class="lucide lucide-clock h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Блок 2: Оценка критериев -->
+<section class="mb-10 px-6 sm:px-8 lg:px-10 max-w-8xl mx-auto animate-fade-up animate-delay-200">
+  <div class="rounded-lg shadow-sm overflow-hidden bg-white/95 border border-[#E5E6EB] transition-all duration-300">
+    <div class="p-6 bg-gradient-to-r from-[#f6f9fe] to-[#e5f0ff] flex flex-row justify-between items-center">
+      <h3 class="text-lg font-medium tracking-tight text-[#2B3467]">Оценка критериев звонков</h3>
+    </div>
+
+    <div class="p-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-x-4 gap-y-4">
+      {% for crit in criteria_labels_filtered %}
+        {% with name=criteria_labels|get_item:crit score=criteria_scores|get_item:crit %}
+          {% if score is not None %}
+            <div class="bg-white rounded-lg shadow-sm border border-gray-100 px-3 py-2 flex flex-col items-center w-full">
+              <div class="flex items-center mb-2 text-center">
+                <h3 class="text-sm font-medium">{{ name }}</h3>
+              </div>
+              <div class="relative w-full h-full flex items-center justify-center">
+                <div class="text-4xl font-extrabold font-mono text-[#2B3467]">
+                  {{ score|floatformat:1 }}
+                </div>
+              </div>
+            </div>
+          {% endif %}
+        {% endwith %}
+      {% endfor %}
+    </div>
+    
+  </div>
+</section>
+
+<!-- Блок 3: Оценки менеджеров и типы возражений -->
+<section class="mt-10 px-6 sm:px-8 lg:px-10 max-w-8xl mx-auto animate-fade-up animate-delay-200">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <!-- График 1: Оценки менеджеров -->
+    <div class="rounded-lg shadow-sm overflow-hidden bg-white/95 border border-[#E5E6EB] min-h-[500px] ">
+      <div class="p-6 bg-gradient-to-r from-[#f6f9fe] to-[#e5f0ff] flex justify-between items-center">
+        <h3 class="text-lg font-medium tracking-tight text-[#2B3467]">Оценки менеджеров</h3>
+      </div>
+      <div class="p-6">
+        <div class="flex items-center mb-4">
+          <div class="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mr-2">
+            <i data-lucide="users" class="h-5 w-5"></i>
+          </div>
+          <h3 class="text-sm font-medium">Рейтинг менеджеров по звонкам</h3>
+        </div>
+        <div class="relative w-full overflow-visible pr-16">
+          <canvas id="managerScoreChart"></canvas>
+          <div id="managerLabels" style="position: absolute; top: 0; left: 0; pointer-events: none;"></div>
+        </div>
+      </div>
+    </div>
+    <!-- График 2: Список входящих запросов -->
+    <div class="rounded-lg shadow-sm overflow-hidden bg-white/95 border border-[#E5E6EB] h-[500px] flex flex-col">
+      <div class="p-6 bg-gradient-to-r from-[#f6f9fe] to-[#e5f0ff] flex justify-between items-center">
+        <h3 class="text-lg font-medium tracking-tight text-[#2B3467]">Список входящих запросов</h3>
+      </div>
+
+      <div class="p-6 flex-1 flex flex-col min-h-0">
+        <div class="flex items-center mb-4">
+          <div class="h-8 w-8 bg-[#BAD7E9]/30 rounded-full flex items-center justify-center text-[#2B3467] mr-2">
+            <svg class="lucide lucide-inbox h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path d="M4 4h16v10H4z" stroke-width="2"/>
+              <path d="M4 14l4 4h8l4-4" stroke-width="2"/>
+            </svg>
+          </div>
+          <h3 class="text-sm font-medium text-muted-foreground">
+            Всего запросов: {{ processed_requests|length }}
+          </h3>
+        </div>
+
+        <!-- Прокручиваемая область -->
+        <div class="space-y-4 overflow-y-auto pr-2 flex-1 min-h-0">
+          {% for request in processed_requests %}
+            <div class="flex items-center p-3 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-[#BAD7E9]/30 text-[#2B3467] mr-3">
+                <span class="text-sm font-semibold">
+                  {{ request.source|slice:":1"|upper }}
+                </span>
+              </div>
+              <div>
+                <p class="text-sm font-medium">
+                  {% if request.source == "amoCRM" and request.user_id %}
+                    <a href="https://{{ request.organization.account_amocrm }}.amocrm.ru/contacts/detail/{{ request.user_id }}"
+                      target="_blank"
+                      class="text-blue-600 hover:underline">
+                      Запрос из {{ request.source }} — Контакт #{{ request.user_id }}
+                    </a>
+                  {% else %}
+                    {{ request.source }} — Без сущности
+                  {% endif %}
+                </p>
+                <p class="text-xs text-muted-foreground">{{ request.created_at|date:"d.m.Y H:i" }}</p>
+              </div>
+            </div>
+          {% empty %}
+            <div class="text-center text-sm text-gray-400">Нет запросов.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if selected_organization.show_dealstage_block %}
+  <!-- Блок 4: Этапы сделок и список входящих запросов -->
+  <section class="mt-10 px-6 sm:px-8 lg:px-10 max-w-8xl mx-auto animate-fade-up animate-delay-200">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      
+      <!-- График 3: Этапы сделок -->
+      <div class="rounded-lg shadow-sm overflow-hidden bg-white/95 border border-[#E5E6EB] h-[600px] flex flex-col">
+        <div class="p-6 bg-gradient-to-r from-[#f6f9fe] to-[#e5f0ff] flex justify-between items-center">
+          <h3 class="text-lg font-medium tracking-tight text-[#2B3467]">Этапы</h3>
+        </div>
+        <div class="p-6 flex-grow flex flex-col">
+          <div class="flex items-center mb-4">
+            <div class="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mr-2">
+              <i data-lucide="bar-chart" class="h-5 w-5"></i>
+            </div>
+            <h3 class="text-sm font-medium">Всего этапов: {{ deal_stage_chart.total }}</h3>
+          </div>
+          <div class="flex-grow flex items-center justify-center">
+            <canvas id="dealStageChart" class="w-full h-full"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- График 4: Типы возражений -->
+      <div class="rounded-lg shadow-sm overflow-hidden bg-white/95 border border-[#E5E6EB] h-[600px]">
+        <div class="p-6 bg-gradient-to-r from-[#f6f9fe] to-[#e5f0ff] flex justify-between items-center">
+          <h3 class="text-lg font-medium tracking-tight text-[#2B3467]">Типы возражений</h3>
+        </div>
+        <div class="p-6">
+          <div class="flex items-center mb-4">
+            <div class="h-8 w-8 bg-pink-100 rounded-full flex items-center justify-center text-pink-600 mr-2">
+              <i data-lucide="pie-chart" class="h-5 w-5"></i>
+            </div>
+            <h3 class="text-sm font-medium">
+              Всего возражений: {{ objection_chart_data.total }}
+            </h3>
+          </div>
+          <div class="w-full h-[400px] flex items-center justify-center">
+            <canvas id="objectionPieChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endif %}
+
+</div>
+
+<!-- Скрипты по ГРАФИКАМ -->
+
+<!-- Скрипт 1: Красим оценки критерием (спидометры) -->
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const getColor = (value) => {
+      if (value < 2) return "#ef4444";      // red-500
+      if (value < 4) return "#f97316";      // orange-500
+      if (value < 6) return "#facc15";      // yellow-400
+      return "#16a34a";                     // green-600
+    }
+
+    const config = (value) => ({
+      type: 'doughnut',
+      data: {
+        datasets: [{
+          data: [value, 10 - value],
+          backgroundColor: [getColor(value), '#e5e7eb'],
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        cutout: '70%',
+        rotation: -90,
+        circumference: 180,
+        plugins: {
+          tooltip: { enabled: false },
+          legend: { display: false }
+        }
+      }
+    });
+
+    {% for name, score in criteria_scores.items %}
+      const ctx{{ forloop.counter }} = document.getElementById("gaugeChart{{ forloop.counter }}");
+      if (ctx{{ forloop.counter }}) {
+        new Chart(ctx{{ forloop.counter }}, config({{ score|floatformat:1 }}));
+      }
+    {% endfor %}
+  });
+</script>
+
+
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const canvas = document.getElementById("managerScoreChart");
+    const labelContainer = document.getElementById("managerLabels");
+    
+    if (!canvas || !labelContainer) {
+      return;
+    }
+
+    const ctx = canvas.getContext("2d");
+    const labels = {{ manager_chart_data.labels|safe }};
+    const scores = {{ manager_chart_data.scores|safe }};
+    const calls = {{ manager_chart_data.calls|safe }};
+    canvas.height = labels.length * 42;  // 42px на одного менеджера
+
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Оценка',
+          data: scores,
+          backgroundColor: '#4F46E5',
+          borderRadius: 6,
+          barThickness: 20,
+          categoryPercentage: 0.8,
+          barPercentage: 0.8,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: {
+          padding: { right: 64 }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            max: 100,
+            ticks: {
+              callback: value => `${value}%`,  // ✅ фикс
+              color: '#6B7280',
+              font: { size: 12 }
+            },
+            grid: { display: true, color: '#E5E7EB' }
+          },
+          y: {
+            ticks: {
+              color: '#374151',
+              font: { size: 13 }
+            },
+            grid: { display: false }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const index = context.dataIndex;
+                return [
+                  `Менеджер: ${labels[index]}`,
+                  `Оценка: ${scores[index]}%`,
+                  `Звонков: ${calls[index]}`
+                ];
+              },
+              title: function () {
+                return '';
+              }
+            }
+          }
+        },
+        animation: {
+          onComplete: function () {
+            const chartInstance = chart;
+            const meta = chartInstance.getDatasetMeta(0);
+            labelContainer.innerHTML = '';
+
+            meta.data.forEach((bar, index) => {
+              const value = scores[index];
+              const { x, y } = bar.tooltipPosition();
+
+              const label = document.createElement("div");
+              label.style.position = "absolute";
+              label.style.top = `${y - 10}px`;
+              label.style.fontWeight = "bold";
+              label.style.fontSize = "13px";
+              label.style.pointerEvents = "none";
+              label.style.whiteSpace = "nowrap";
+              label.innerText = `${value}%`;
+
+              if (value > 100) {
+                // Жестко фиксируем на позиции 100% по оси X
+                const xMax = chart.scales.x.getPixelForValue(100);
+                label.style.left = `${xMax + 10}px`;
+                label.style.color = "#000000";
+              } else if (value >= 90) {
+                // Отображаем ВНУТРИ графика, светлым цветом
+                label.style.left = `${x - 40}px`;
+                label.style.color = "#ffffff";
+              } else {
+                // Стандартный случай
+                label.style.left = `${x + 10}px`;
+                label.style.color = "#000000";
+              }
+
+              labelContainer.appendChild(label);
+            });
+          }
+        }
+      }
+    });
+
+    canvas.addEventListener("mouseenter", () => {
+      labelContainer.style.display = "none";
+    });
+
+    canvas.addEventListener("mouseleave", () => {
+      labelContainer.style.display = "block";
+    });
+
+  });
+</script>
+
+
+<!-- Скрипт 3: Типы возражений -->
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const ctx = document.getElementById("objectionPieChart").getContext("2d");
+
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: {{ objection_chart_data.labels|safe }},
+        datasets: [{
+          data: {{ objection_chart_data.values|safe }},
+          backgroundColor: ['#4F46E5', '#EC4899', '#10B981'],
+          borderWidth: 2,
+          hoverOffset: 8
+        }]
+      },
+      options: {
+        cutout: '50%',
+        responsive: true,
+        animation: {
+          animateRotate: true,
+          animateScale: true
+        },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 10,
+              boxHeight: 10,
+              color: '#374151',
+              font: {
+                size: 14,
+                weight: '350',
+              },
+              padding: 16,
+              usePointStyle: true,
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const label = context.label || '';
+                const value = context.parsed || 0;
+                return `${label}: ${value}`;
+              }
+            }
+          }
+        }
+      }
+    });
+  });
+</script>
+
+<!-- Скрипт 4: Стадии сделок -->
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const ctx = document.getElementById("dealStageChart").getContext("2d");
+
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: {{ deal_stage_chart.labels|safe }},
+        datasets: [{
+          label: 'Количество запросов',
+          data: {{ deal_stage_chart.values|safe }},
+          backgroundColor: '#6366F1',
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        indexAxis: 'x',
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { enabled: true }
+        }
+      }
+    });
+  });
+</script>
+
+
+<!-- Скрипты по ФИЛЬТРАМ -->
+
+<!-- Скрипт 5: Фильтр по дате -->
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const dateFromInput = document.getElementById("date_from");
+    const dateToInput = document.getElementById("date_to");
+    const visibleInput = document.getElementById("date-range");
+
+    const picker = flatpickr(visibleInput, {
+      mode: "range",
+      dateFormat: "Y-m-d", // то, что отправляется в GET
+      altInput: false,     // мы сами вставим отображение
+      defaultDate: [
+        dateFromInput?.value || "",
+        dateToInput?.value || ""
+      ],
+      onReady: function (selectedDates, dateStr, instance) {
+        if (selectedDates.length === 2) {
+          const formattedFrom = flatpickr.formatDate(selectedDates[0], "d.m.Y");
+          const formattedTo = flatpickr.formatDate(selectedDates[1], "d.m.Y");
+          visibleInput.value = `${formattedFrom} - ${formattedTo}`;
+        }
+        if (selectedDates.length) {
+          instance.currentYear = selectedDates[0].getFullYear();
+          instance.currentMonth = selectedDates[0].getMonth();
+          instance.redraw();
+        }
+      },
+      onChange: function (selectedDates, dateStr, instance) {
+        if (selectedDates.length === 2) {
+          const from = flatpickr.formatDate(selectedDates[0], "Y-m-d");
+          const to = flatpickr.formatDate(selectedDates[1], "Y-m-d");
+
+          dateFromInput.value = from;
+          dateToInput.value = to;
+
+          const formattedFrom = flatpickr.formatDate(selectedDates[0], "d.m.Y");
+          const formattedTo = flatpickr.formatDate(selectedDates[1], "d.m.Y");
+          visibleInput.value = `${formattedFrom} - ${formattedTo}`;
+        }
+      }
+    });
+
+    // При загрузке страницы: красиво отобразим диапазон
+    const fromVal = dateFromInput.value;
+    const toVal = dateToInput.value;
+    if (fromVal && toVal) {
+      const formattedFrom = flatpickr.formatDate(new Date(fromVal), "d.m.Y");
+      const formattedTo = flatpickr.formatDate(new Date(toVal), "d.m.Y");
+      visibleInput.value = `${formattedFrom} - ${formattedTo}`;
+    }
+  });
+</script>
+
+<!-- Скрипт 6: Фильтр по менеджеру и департменту -->
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("filter-form");
+    const managerSelect = document.getElementById("manager_id");
+    const departmentSelect = document.getElementById("department");
+
+    if (form && managerSelect && departmentSelect) {
+      form.addEventListener("submit", function () {
+        const managerSelected = managerSelect.value;
+        const departmentSelected = departmentSelect.value;
+
+        // Если выбраны оба — сбрасываем отдел
+        if (managerSelected && departmentSelected) {
+          departmentSelect.value = "";
+        }
+      });
+    }
+  });
+</script>
+

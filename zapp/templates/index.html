@@ -1,0 +1,617 @@
+{% load user_tags %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <style>
+        pre {
+            white-space: pre-wrap; /* Перенос строк внутри <pre> */
+            word-wrap: break-word; /* Разрыв слов, если слишком длинные */
+        }
+        .cursor-pointer {
+            cursor: pointer;
+        }
+        .donkit-response {
+            white-space: pre-wrap; /* Перенос строк */
+            line-height: 1.6; /* Увеличиваем межстрочный интервал */
+            font-size: 16px; /* Удобный размер текста */
+        }
+        .row-details {
+            display: none; /* Скрыть по умолчанию */
+        }
+        .collapse.show {
+            display: table-row; /* Показать как строку таблицы */
+        }
+    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
+    <title>Aventica AI Script</title>
+</head>
+<body>
+    <!-- Header -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom"
+        style="position: fixed; top: 0; left: 0; right: 0; z-index: 1030;">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <img src="/static/img/logo_av.jpg" alt="Logo" style="height: 40px; margin-right: 10px;">
+                <span style="font-size: 1.25rem; font-weight: bold;">Aventica AI Script</span>
+            </a>
+            <div class="d-flex">
+                <span class="navbar-text me-3">Пользователь: {{ user.username }}</span>
+                <form method="post" action="{% url 'logout' %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger btn-sm">Выйти</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            {% if request.user.profile.role == "superadmin" %}
+            <div class="col-md-2 border-end bg-light vh-100" style="position: fixed; top: 56px; bottom: 0; overflow-y: auto;">
+                <h5 class="mt-3">Организации</h5>
+                <ul class="list-group">
+                    {% for organization in organizations %}
+                        <li class="list-group-item {% if organization.pk == selected_organization.pk %}active{% endif %}">
+                            <a href="?organization_id={{ organization.pk }}" class="text-decoration-none text-dark">
+                                {{ organization.name }}
+                            </a>
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item">Организации не найдены.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <!-- Main Content -->
+            <div class="col-md-10 offset-md-2" style="padding-top: 72px;">
+            {% else %}
+            <!-- Main Content -->
+            <div class="col-md-12" style="padding-top: 72px;">
+            {% endif %}
+                {% if selected_organization %}
+                    <h3>{{ selected_organization.name }}</h3>
+
+                    <!-- Tabs -->
+                    <ul class="nav nav-tabs mt-4" id="organizationTabs" role="tablist">
+                    {% if user|is_admin_or_super %}
+                        <li class="nav-item" role="presentation">
+                            <a href="?tab=main-info&organization_id={{ selected_organization.id }}" class="nav-link {% if request.GET.tab == 'main-info' %}active{% endif %}" id="main-info-tab">Основная информация</a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a href="?tab=requests&organization_id={{ selected_organization.id }}" class="nav-link {% if request.GET.tab == 'requests' or not request.GET.tab %}active{% endif %}" id="requests-tab">Звонки</a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a href="?tab=prompts&organization_id={{ selected_organization.id }}" class="nav-link {% if request.GET.tab == 'prompts' %}active{% endif %}" id="prompts-tab">Промпты</a>
+                        </li>
+                    {% endif %}
+                        {% if user|is_admin_or_super_or_user %}
+                        <li class="nav-item" role="presentation">
+                            <a href="?tab=weekly&organization_id={{ selected_organization.id }}"
+                                class="nav-link {% if request.GET.tab == 'weekly' %}active{% endif %}">
+                                Неделя
+                            </a>
+                        </li>
+                        {% endif %}
+                        <li class="nav-item" role="presentation">
+                            <a href="?tab=stats20&organization_id={{ selected_organization.id }}" 
+                                class="nav-link {% if request.GET.tab == 'stats20' %}active{% endif %}" 
+                                id="stats20-tab">Статистика</a>
+                        </li>
+                    </ul>
+
+                    <!-- Tab Content -->
+                    <div class="tab-content mt-4">
+                    {% if user|is_admin_or_super %}
+                        <!-- Вкладка "Основная информация" -->
+                        <div class="tab-pane fade {% if request.GET.tab == 'main-info' %}show active{% endif %}" id="main-info" role="tabpanel">
+                            <p><strong>Краткое описание:</strong> {{ selected_organization.short_description }}</p>
+                            <p><strong>Автор:</strong> {{ selected_organization.author }}</p>
+                            <p><strong>Дата создания:</strong> {{ selected_organization.created_at|date:"d.m.Y H:i:s" }}</p>
+                            <p>
+                                <strong>Общее время обработки аудио:</strong>
+                                {{ total_audio_duration }} sec.
+                            </p>
+                            <p><strong>Аккаунт amoCRM:</strong> {{ selected_organization.account_amocrm }}</p>
+                            <p><strong>Bearer amoCRM:</strong> {{ selected_organization.bearer_amocrm }}</p>
+                            <p><strong>API-ключ Speech2Text:</strong> {{ selected_organization.s2t_api_key|default:"Не задан" }}</p>
+                            <p><strong>API-ключ Fireworks:</strong> {{ selected_organization.donkit_api_key|default:"Не задан" }}</p>
+                        </div>
+
+                        <!-- Вкладка "Звонки" -->
+                        <div class="tab-pane fade {% if request.GET.tab == 'requests' or not request.GET.tab %}show active{% endif %}" id="requests" role="tabpanel">
+                            <h5>Список входящих запросов</h5>
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Дата поступления</th>
+                                        <th>Тип</th>
+                                        <th>Источник</th>  <!-- Новая колонка "Источник" -->
+                                        <th>ID контакта (amo)</th>
+                                        <th>Сущность (B24)</th>  <!-- Новая колонка "ID контакта B24" -->
+                                        <th>ID сущности (B24)</th>  <!-- Новая колонка "ID контакта B24" -->
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for processed_request in related_requests %}
+                                    <tr class="cursor-pointer" data-target="#request-details-{{ processed_request.id }}" >
+                                        <td>{{ processed_request.id }}</td>
+                                        <td>
+                                            {{ processed_request.created_at|date:"d.m.Y H:i" }}
+                                            {% if processed_request.ignored %}
+                                                <span class="badge bg-danger">Игнорирован</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if processed_request.call_direction == "incoming" %}
+                                                <span class="badge bg-warning text-dark" data-ignore="true">В</span>
+                                            {% elif processed_request.call_direction == "outgoing" %}
+                                                <span class="badge bg-secondary" data-ignore="true">И</span>
+                                            {% else %}
+                                                <span class="badge bg-light text-muted" data-ignore="true">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if processed_request.source == "amoCRM" %}
+                                                <span class="badge bg-primary" data-ignore="true">amoCRM</span>
+                                            {% elif processed_request.source == "Bitrix24" %}
+                                                <span class="badge bg-success" data-ignore="true">Bitrix24</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary" data-ignore="true">{{ processed_request.source }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ processed_request.user_id|default:"-" }}</td>
+                                        <td>{{ processed_request.crm_entity_type|default:"-" }}</td>  <!-- Выводим ID контакта B24 -->
+                                        <td>{{ processed_request.crm_entity_id|default:"-" }}</td>  <!-- Выводим ID контакта B24 -->
+                                        <td>
+                                            {% if processed_request.source == "amoCRM" and processed_request.user_id %}
+                                                <a href="https://{{ processed_request.organization.account_amocrm }}.amocrm.ru/contacts/detail/{{ processed_request.user_id }}" 
+                                                target="_blank" 
+                                                class="btn btn-outline-primary btn-sm" 
+                                                data-ignore="true">
+                                                    Перейти в amoCRM
+                                                </a>
+                                            {% elif processed_request.source == "Bitrix24" and processed_request.crm_entity_id %}
+                                                <a href="https://{{ processed_request.organization.b24_domain }}.bitrix24.ru/crm/{{ processed_request.crm_entity_type }}/details/{{ processed_request.crm_entity_id }}/" 
+                                                target="_blank" 
+                                                class="btn btn-outline-success btn-sm" 
+                                                data-ignore="true">
+                                                    Перейти в Bitrix24
+                                                </a>
+                                            {% else %}
+                                                <span class="text-muted">Нет контакта</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+
+
+                                    <tr class="row-details" id="request-details-{{ processed_request.id }}">
+
+
+
+                                        <td colspan="8">
+                                            <div class="p-3 bg-light rounded">
+                                                <!-- Информация о входящем запросе -->
+                                                <h6>Данные запроса из amoCRM</h6>
+                                                <p>
+                                                    {% if processed_request.audio_link %}
+                                                        <audio controls>
+                                                            <source src="{{ processed_request.audio_link }}" type="audio/mpeg">
+                                                            Ваш браузер не поддерживает аудио-плеер.
+                                                        </audio>
+                                                    {% else %}
+                                                        Нет записи
+                                                    {% endif %}
+                                                </p>
+                                                <p>
+                                                    <a href="#" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#rawDataModal-{{ processed_request.id }}">Тело запроса</a>
+                                                </p>
+                                                <br>
+
+                                                <!-- Исходящие запросы -->
+                                                <h6>Исходящие запросы на транскрибацию</h6>
+                                                <table class="table table-sm">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>ID</th>
+                                                            <th>Дата</th>
+                                                            <th>Статус</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for s2t_request in processed_request.related_s2t_requests.all %}
+                                                            <tr class="cursor-pointer" data-target="#s2t-request-details-{{ s2t_request.id }}" >
+                                                                <td>{{ s2t_request.id }}</td>
+                                                                <td>{{ s2t_request.created_at|date:"d.m.Y H:i" }}</td>
+                                                                <td>{{ s2t_request.status }}</td>
+                                                            </tr>
+
+
+                                                            <tr class="row-details" id="s2t-request-details-{{ s2t_request.id }}">
+
+
+
+                                                                <td colspan="3" class="p-0">
+                                                                    <div >
+                                                                        <div class="p-3 rounded">
+                                                                            <p><strong>ID:</strong> {{ s2t_request.id }}</p>
+                                                                            <p><strong>Speech2Text ID:</strong> {{ s2t_request.task_id }}</p>
+                                                                            <p><strong>Дата:</strong> {{ s2t_request.created_at|date:"d.m.Y H:i" }}</p>
+                                                                            <p><strong>Статус:</strong> {{ s2t_request.status }}</p>
+                                                                            <p>
+                                                                                <button class="btn btn-outline-primary btn-sm" 
+                                                                                        data-bs-toggle="modal" 
+                                                                                        data-bs-target="#transcriptionModal-{{ s2t_request.id }}">
+                                                                                    Показать транскрибацию
+                                                                                </button>
+                                                                            </p>
+
+                                                                            <!-- Модальное окно -->
+                                                                            <div class="modal fade" id="transcriptionModal-{{ s2t_request.id }}" tabindex="-1" aria-labelledby="transcriptionModalLabel-{{ s2t_request.id }}" aria-hidden="true">
+                                                                                <div class="modal-dialog modal-lg">
+                                                                                    <div class="modal-content">
+                                                                                        <div class="modal-header">
+                                                                                            <h5 class="modal-title">Транскрибированный текст (ID {{ s2t_request.task_id }})</h5>
+                                                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                                                                                        </div>
+                                                                                        <div class="modal-body">
+                                                                                            <pre style="white-space: pre-wrap;">{{ s2t_request.transcribed_text|default:"Текст отсутствует" }}</pre>
+                                                                                        </div>
+                                                                                        <div class="modal-footer">
+                                                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        {% empty %}
+                                                            <tr>
+                                                                <td colspan="3">Нет данных о транскрибации.</td>
+                                                            </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                                <button class="btn btn-warning btn-sm" onclick="sendToTranscription({{ processed_request.id }})">
+                                                    Отправить на транскрибацию
+                                                </button>
+                                                <p></p>
+                                                <br>
+
+                                                <!-- Вложенные запросы T-Model -->
+                                                <h6>Запросы в T-Model</h6>
+                                                <table class="table table-sm">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>ID</th>
+                                                            <th>Дата создания</th>
+                                                            <th>Промпт</th>
+                                                            <th>Ответ</th>
+                                                            <th>Действия</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for donkit_request in processed_request.related_donkit_requests.all %}
+                                                            <tr data-bs-toggle="modal" data-bs-target="#donkitModal-{{ donkit_request.id }}" class="cursor-pointer" onclick="event.stopPropagation();">
+                                                                <td>{{ donkit_request.id }}</td>
+                                                                <td>{{ donkit_request.created_at|date:"d.m.Y H:i:s" }}</td>
+                                                                <td>{{ donkit_request.prompt.name|default:"Не задан" }}</td>
+                                                                <td>{{ donkit_request.answer|truncatechars:30|default:"Ответ отсутствует" }}</td>
+                                                                <td>
+                                                                    <!-- Кнопка добавления примечания в amoCRM -->
+                                                                    <button class="btn btn-outline-primary btn-sm" onclick="addCrmNote({{ processed_request.id }}, '{{ csrf_token }}', event)">
+                                                                        Добавить в amoCRM
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                            <!-- Модальное окно -->
+                                                            <div class="modal fade" id="donkitModal-{{ donkit_request.id }}" tabindex="-1" aria-labelledby="donkitModalLabel-{{ donkit_request.id }}" aria-hidden="true">
+                                                                <div class="modal-dialog modal-lg">
+                                                                    <div class="modal-content">
+                                                                        <div class="modal-header">
+                                                                            <h5 class="modal-title">Детали запроса в T-Model (ID {{ donkit_request.id }})</h5>
+                                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                                                                        </div>
+                                                                        <div class="modal-body">
+                                                                            <p><strong>Дата создания:</strong> {{ donkit_request.created_at|date:"d.m.Y H:i:s" }}</p>
+                                                                            <p><strong>Чат ID:</strong> {{ donkit_request.chat_id }}</p>
+                                                                            <p><strong>Промпт:</strong> {{ donkit_request.prompt.name|default:"Не задан" }}</p>
+                                                                            <p><strong>Вопрос:</strong></p>
+                                                                            <pre>{{ donkit_request.question }}</pre>
+                                                                            <p><strong>Ответ:</strong></p>
+                                                                            <pre class="donkit-response">
+                                                                                {{ donkit_request.answer|default:"Ответ отсутствует" }}
+                                                                            </pre>
+                                                                        </div>
+                                                                        <div class="modal-footer">
+                                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        {% empty %}
+                                                            <tr>
+                                                                <td colspan="4">Нет данных о запросах в T-Model.</td>
+                                                            </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                                <select name="prompt_id" id="promptSelect_{{ processed_request.id }}" class="form-select">
+                                                    {% for prompt in prompts %}
+                                                        <option value="{{ prompt.id }}">{{ prompt.name }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                                <p></p>
+                                                <button class="btn btn-danger btn-sm" onclick="sendToDonkit({{ processed_request.id }}, '{{ csrf_token }}')">Отправить в T-Model</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="8">Нет входящих запросов.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                                <nav aria-label="Навигация по страницам">
+                                    <ul class="pagination justify-content-center">
+                                        
+
+                                    {% for num in smart_page_range %}
+                                        {% if num %}
+                                            {% if related_requests.number == num %}
+                                                <li class="page-item active">
+                                                    <span class="page-link">{{ num }}</span>
+                                                </li>
+                                            {% else %}
+                                                <li class="page-item">
+                                                    <a class="page-link" href="?organization_id={{ selected_organization.id }}&page={{ num }}&tab=requests">{{ num }}</a>
+                                                </li>
+                                            {% endif %}
+                                        {% else %}
+                                            <li class="page-item disabled">
+                                                <span class="page-link">…</span>
+                                            </li>
+                                        {% endif %}
+                                    {% endfor %}
+
+                                       
+                                    </ul>
+                                </nav>
+                        </div>
+
+                        <!-- Вкладка "Промпты" -->
+                        <div class="tab-pane fade {% if request.GET.tab == 'prompts' %}show active{% endif %}" id="prompts" role="tabpanel">
+                            <h5>Промпты</h5>
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Название</th>
+                                        <th>Описание</th>
+                                        <th>Дата создания</th>
+                                        <th>Использование</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for prompt in prompts %}
+                                        <tr>
+                                            <td>{{ prompt.name }}</td>
+                                            <td>{{ prompt.description }}</td>
+                                            <td>{{ prompt.created_at|date:"d.m.Y H:i" }}</td>
+                                            <td>{{ prompt.related_donkit_requests.count }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr>
+                                            <td colspan="4">Нет доступных промптов.</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            <h6>Добавить новый промпт</h6>
+                            <form method="post" action="{% url 'add_prompt' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="organization_id" value="{{ selected_organization.id }}">
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Название промпта</label>
+                                    <input type="text" class="form-control" id="name" name="name" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="description" class="form-label">Описание промпта</label>
+                                    <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Добавить</button>
+                            </form>
+                        </div>
+                    {% endif %}
+                        <!-- Вкладка "Неделя" -->
+                        {% if user|is_admin_or_super_or_user %}
+                        <div class="tab-pane fade {% if request.GET.tab == 'weekly' %}show active{% endif %}" id="weekly" role="tabpanel">
+                            {% include 'weekly.html' %}
+                        </div>
+                        {% endif %}
+                        <!-- Вкладка "Статистика 2.0" -->
+                        <div class="tab-pane fade {% if request.GET.tab == 'stats20' %}show active{% endif %}" id="stats20" role="tabpanel"> 
+                        {% include 'stats_20.html' %}
+                        </div>
+
+                        <!-- Модальные окна -->
+                        {% for request in related_requests %}
+                        <div class="modal fade" id="rawDataModal-{{ request.id }}" tabindex="-1" aria-labelledby="rawDataModalLabel-{{ request.id }}" aria-hidden="true">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Тело запроса (ID {{ request.id }})</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <pre>{{ request.raw_data|safe }}</pre>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p>Организация не выбрана.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function sendToTranscription(requestId) {
+            fetch(`/send_to_transcription/${requestId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Запрос успешно отправлен на транскрибацию');
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Ошибка при отправке запроса');
+            });
+        }
+
+        function sendToDonkit(requestId, csrfToken) {
+            // Получаем значение выбранного промпта по уникальному id
+            const promptId = document.getElementById(`promptSelect_${requestId}`).value;
+
+            console.log("Выбранный prompt_id:", promptId); // Отладочный лог
+
+            fetch(`/send_to_donkit/${requestId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify({ prompt_id: promptId }) // Передаём JSON
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Запрос успешно отправлен в T-Model');
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Ошибка при отправке запроса в T-Model');
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            const responseElements = document.querySelectorAll(".donkit-response"); // Находим все элементы с классом T-Model-response
+            responseElements.forEach((element) => {
+                const rawResponse = element.innerHTML; // Получаем содержимое
+                const formattedResponse = formatDonkitResponse(rawResponse); // Форматируем текст
+                element.innerHTML = formattedResponse; // Обновляем содержимое элемента
+            });
+        });
+
+        document.addEventListener("DOMContentLoaded", function () {
+            const tabs = document.querySelectorAll('button[data-bs-toggle="tab"]');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    localStorage.setItem('activeTab', tab.id);
+                });
+            });
+
+            // Устанавливаем активную вкладку при загрузке страницы
+            const activeTab = localStorage.getItem('activeTab');
+            if (activeTab) {
+                const tabElement = document.getElementById(activeTab);
+                if (tabElement) {
+                    tabElement.click();
+                }
+            }
+        });
+
+
+        document.addEventListener("DOMContentLoaded", function () {
+            const rows = document.querySelectorAll('tr[data-target]');
+
+            rows.forEach(row => {
+                row.addEventListener('click', function (event) {
+                    if (event.target.closest('[data-ignore]')) return;
+
+                    const targetId = row.getAttribute('data-target');
+                    const targetElement = document.querySelector(targetId);
+
+                    if (targetElement) {
+                        targetElement.classList.toggle('show');
+                        targetElement.style.display = targetElement.classList.contains('show') ? 'table-row' : 'none';
+                    }
+                });
+            });
+        });
+
+        function formatDonkitResponse(responseText) {
+            // Убираем фразу "Источники знаний..."
+            // responseText = responseText.replace(/Источники знаний:.*/, '');
+
+            // Делаем текст между ** жирным
+            // responseText = responseText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+            // Добавляем новую строку после двоеточия и перед тире
+            // responseText = responseText.replace(/:(.*?)-/g, ':<br> -');
+
+            // Добавляем новую строку для блоков 1., 2., ..., Итог
+            // responseText = responseText.replace(/(\d\.)/g, '<br><br>$1');
+            // responseText = responseText.replace(/Итог:/, '<br><br><strong>Итог:</strong>');
+
+            return responseText;
+        }
+
+        function addCrmNote(requestId, csrfToken, event) {
+            event.stopPropagation();
+
+            fetch(`/add_crm_note/${requestId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert("Комментарий успешно добавлен в CRM!");
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Ошибка при отправке комментария.');
+            });
+        }
+
+
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+</html>

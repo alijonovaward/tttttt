@@ -1,0 +1,206 @@
+{% if not active_error_report %}
+  <div class="alert alert-warning">
+    Для данной организации ещё не создан ни один еженедельный отчёт.
+  </div>
+{% else %}
+
+  <!-- Стрелки и даты -->
+  <div class="d-flex justify-content-center align-items-center mt-4 mb-3">
+    <div class="d-flex align-items-center w-100" style="max-width: 800px; justify-content: space-between;">
+      {% if prev_report %}
+        <a href="?tab=weekly&organization_id={{ selected_organization.id }}&report_id={{ prev_report.id }}" class="btn btn-outline-secondary">
+          ← Предыдущая неделя
+        </a>
+      {% else %}
+        <div style="width: 180px;"></div>
+      {% endif %}
+
+      <div class="text-muted text-center" style="font-weight: 500;">
+        с {{ active_error_report.week_start|date:"d E Y" }} по {{ active_error_report.week_end|date:"d E Y" }}
+      </div>
+
+      {% if next_report %}
+        <a href="?tab=weekly&organization_id={{ selected_organization.id }}&report_id={{ next_report.id }}" class="btn btn-outline-secondary">
+          Следующая неделя →
+        </a>
+      {% else %}
+        <div style="width: 180px;"></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Подвкладки -->
+  <ul class="nav nav-tabs mb-4" id="weeklyTab" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="purchase-tab" data-bs-toggle="tab" data-bs-target="#purchase" type="button" role="tab" aria-controls="purchase" aria-selected="true">
+        Факторы покупки
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="refusal-tab" data-bs-toggle="tab" data-bs-target="#refusal" type="button" role="tab" aria-controls="refusal" aria-selected="false">
+        Факторы отказа
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="weeklyTabContent">
+
+    <!-- Вкладка Факторы покупки -->
+    <div class="tab-pane fade show active" id="purchase" role="tabpanel" aria-labelledby="purchase-tab">
+      {% if factors %}
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Фактор покупки</th>
+              <th>Кол-во случаев</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for factor in factors %}
+              <tr class="cursor-pointer" data-target="#factor-details-{{ factor.id }}">
+                <td>{{ factor.title }}</td>
+                <td>{{ factor.examples.count }}</td>
+              </tr>
+              <tr class="row-details" id="factor-details-{{ factor.id }}">
+                <td colspan="2">
+                  <div class="p-3 bg-light rounded">
+                    <h6>Примеры:</h6>
+                    {% if factor.examples.exists %}
+                      <table class="table table-bordered table-sm mt-3" style="table-layout: fixed; width: 100%;">
+                        <colgroup>
+                          <col style="width: 80%;">
+                          <col style="width: 10%;">
+                          <col style="width: 10%;">
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>Текст примера</th>
+                            <th>Звонок</th>
+                            <th>amoCRM</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for example in factor.examples.all %}
+                            <tr>
+                              <td>{{ example.text }}</td>
+                              <td>
+                                {% for req in example.incoming_requests.all %}
+                                  <a href="?tab=requests&organization_id={{ selected_organization.id }}&highlight={{ req.id }}" class="badge bg-primary">
+                                    #{{ req.id }}
+                                  </a>
+                                {% empty %}
+                                  <span class="text-muted">Нет связей</span>
+                                {% endfor %}
+                              </td>
+                              <td>
+                                {% for req in example.incoming_requests.all %}
+                                  {% if req.user_id %}
+                                    <a href="https://{{ req.organization.account_amocrm }}.amocrm.ru/contacts/detail/{{ req.user_id }}" target="_blank" class="badge bg-success">
+                                      {{ req.user_id }}
+                                    </a>
+                                  {% else %}
+                                    <span class="text-muted">–</span>
+                                  {% endif %}
+                                {% empty %}
+                                  <span class="text-muted">Нет связей</span>
+                                {% endfor %}
+                              </td>
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    {% else %}
+                      <p class="text-muted">Нет примеров.</p>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="text-muted">Нет выявленных факторов покупки.</p>
+      {% endif %}
+    </div>
+
+    <!-- Вкладка Факторы отказа -->
+    <div class="tab-pane fade" id="refusal" role="tabpanel" aria-labelledby="refusal-tab">
+      {% if errors %}
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Фактор отказа</th>
+              <th>Кол-во случаев</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for error in errors %}
+              <tr class="cursor-pointer" data-target="#error-details-{{ error.id }}">
+                <td>{{ error.title }}</td>
+                <td>{{ error.examples.count }}</td>
+              </tr>
+              <tr class="row-details" id="error-details-{{ error.id }}">
+                <td colspan="2">
+                  <div class="p-3 bg-light rounded">
+                    <h6>Примеры:</h6>
+                    {% if error.examples.exists %}
+                      <table class="table table-bordered table-sm mt-3" style="table-layout: fixed; width: 100%;">
+                        <colgroup>
+                          <col style="width: 80%;">
+                          <col style="width: 10%;">
+                          <col style="width: 10%;">
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>Текст примера</th>
+                            <th>Звонок</th>
+                            <th>amoCRM</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for example in error.examples.all %}
+                            <tr>
+                              <td>{{ example.text }}</td>
+                              <td>
+                                {% for req in example.incoming_requests.all %}
+                                  <a href="?tab=requests&organization_id={{ selected_organization.id }}&highlight={{ req.id }}" class="badge bg-primary">
+                                    #{{ req.id }}
+                                  </a>
+                                {% empty %}
+                                  <span class="text-muted">Нет связей</span>
+                                {% endfor %}
+                              </td>
+                              <td>
+                                {% for req in example.incoming_requests.all %}
+                                  {% if req.user_id %}
+                                    <a href="https://{{ req.organization.account_amocrm }}.amocrm.ru/contacts/detail/{{ req.user_id }}" target="_blank" class="badge bg-success">
+                                      {{ req.user_id }}
+                                    </a>
+                                  {% else %}
+                                    <span class="text-muted">–</span>
+                                  {% endif %}
+                                {% empty %}
+                                  <span class="text-muted">Нет связей</span>
+                                {% endfor %}
+                              </td>
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    {% else %}
+                      <p class="text-muted">Нет примеров.</p>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="text-muted">Нет выявленных факторов отказа.</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+{% endif %}

@@ -1,0 +1,21 @@
+celerybeat-schedule
+celery.pid
+celery.log
+x_celery.log
+
+# Media va uploads (foydalanuvchi fayllari)
+media/
+uploads/
+
+# Socket fayllar
+*.sock
+
+# Weekly report logs
+weekly_reports_logs/
+wget-log
+
+# Pycache va temp fayllar
+__pycache__/
+*.pyc
+.idea
+.DS_Store
