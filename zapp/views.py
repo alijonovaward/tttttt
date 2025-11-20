@@ -101,7 +101,7 @@ def get_smart_page_range(page, paginator, delta=2, ends=2):
             last = num
     return result
 
-
+# oka
 @login_required
 def home_view(request):
     organizations = Organization.objects.all()
